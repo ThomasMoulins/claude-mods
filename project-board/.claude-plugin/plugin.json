@@ -1,0 +1,6 @@
+{
+  "name": "project-board",
+  "version": "0.2.0",
+  "description": "Affiche tes cartes d'un projet GitHub (statut, priorité, epic) dans un panneau et une ligne d'état, via gh, en lecture seule.",
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "unity-console",
+  "version": "0.2.0",
+  "description": "Résume les erreurs de compilation C# de l'Editor Unity (Editor.log, macOS, Windows et Linux) dans un panneau et une ligne d'état, sans recopier la console.",
+  "types": "./types/index.d.ts"
+}

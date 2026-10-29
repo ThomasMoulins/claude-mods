@@ -1,0 +1,24 @@
+{
+  "name": "claude-mods",
+  "owner": {
+    "name": "ThomasMoulins"
+  },
+  "description": "Mods Claude Code pour développer un jeu Unity : erreurs de compilation, cartes GitHub, garde sur les fichiers Unity.",
+  "plugins": [
+    {
+      "name": "unity-console",
+      "source": "./unity-console",
+      "description": "Erreurs de compilation C# de l'Editor Unity dans un panneau et une ligne d'état."
+    },
+    {
+      "name": "project-board",
+      "source": "./project-board",
+      "description": "Tes cartes d'un projet GitHub (statut, priorité, epic) dans un panneau, en lecture seule."
+    },
+    {
+      "name": "unity-asset-guard",
+      "source": "./unity-asset-guard",
+      "description": "Protège les .meta, scènes, prefabs et assets YAML Unity des modifications à la main de Claude."
+    }
+  ]
+}

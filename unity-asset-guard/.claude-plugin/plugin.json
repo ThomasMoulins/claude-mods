@@ -1,0 +1,5 @@
+{
+  "name": "unity-asset-guard",
+  "version": "0.2.0",
+  "description": "Empêche Claude de casser les .meta, scènes, prefabs et assets YAML d'un projet Unity, son .lfsconfig et ses dossiers générés : refuse, ou demande avant."
+}
