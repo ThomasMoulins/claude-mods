@@ -166,3 +166,18 @@ test('Windows paths with backslashes are guarded like the others', () => {
   const w = judgeCommand("rm 'C:\\Game\\MonJeu\\Assets\\A.cs'", 'C:\\Game', 'MonJeu', false)
   expect(w.kind === 'deny' && w.reason).toContain('MonJeu/Assets/A.cs.meta')
 })
+
+test('generated folders and .lfsconfig: writes are refused, reads and here-document data are not', () => {
+  const check = (command: string) => judgeCommand(command, ROOT, 'MonJeu', false).kind
+  expect(check('rm -rf MonJeu/Library')).toBe('deny')
+  expect(check('cp notes.txt MonJeu/Temp/notes.txt')).toBe('deny')
+  expect(check('git add MonJeu/UserSettings')).toBe('deny')
+  expect(check('sed -i "" s/a/b/ .lfsconfig')).toBe('deny')
+  expect(check('echo x > MonJeu/Logs/out.log')).toBe('deny')
+  expect(check('cp MonJeu/Library/LastSceneManagerSetup.txt /tmp/scenes.txt')).toBe('allow')
+  expect(check('node check.mts MonJeu/Logs/x.log')).toBe('allow')
+  expect(check('cat .lfsconfig')).toBe('allow')
+  expect(check("cat > /tmp/s.mts <<'EOF'\nconst p = 'MonJeu/Logs/x.log'\nrm MonJeu/Library/x\nEOF\nnode /tmp/s.mts")).toBe('allow')
+  expect(check('cat > MonJeu/Logs/x.log <<EOF\nhello\nEOF')).toBe('deny')
+  expect(check('cat <<<"MonJeu/Library" | wc -c')).toBe('allow')
+})

@@ -13,7 +13,10 @@ const YAML = /\.(unity|prefab|asset|mat|controller|overrideController|anim|mask|
 const LFS_CONFIG = /(^|\/)\.lfsconfig$/
 const GENERATED = '(Library|Temp|Logs|UserSettings|obj)(/|$)'
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-const READ_ONLY = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'echo'])
+// Programs that change the paths they are given; for a copy, only its destination.
+const WRITERS = new Set(['rm', 'rmdir', 'unlink', 'mv', 'touch', 'tee', 'sed', 'perl', 'truncate', 'ln', 'chmod', 'chown', 'mkdir', 'dd', 'install'])
+const COPIERS = new Set(['cp', 'rsync'])
+const GIT_WRITERS = new Set(['rm', 'mv', 'add', 'checkout', 'restore', 'clean', 'reset'])
 
 export { relativeTo }
 
@@ -54,6 +57,21 @@ export function judgeEdit(input: { rel: string; unityDir: string | null; isWrite
     }
   }
   return editVerdict(input.rel, cls, input.editorOpen)
+}
+
+// Drops the bodies of here-documents: their lines are data written somewhere, not commands.
+export function stripHeredocs(command: string): string {
+  const out: string[] = []
+  let end: string | null = null
+  for (const line of command.split('\n')) {
+    if (end !== null) {
+      if (line.trim() === end) end = null
+      continue
+    }
+    out.push(line)
+    end = line.match(/(?<!<)<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1/)?.[2] ?? null
+  }
+  return out.join('\n')
 }
 
 // Splits a shell command into simple commands of words, keeping quotes together.
@@ -122,7 +140,7 @@ function worst(verdicts: Verdict[]): Verdict {
 }
 
 export function judgeCommand(command: string, root: string, unityDir: string | null, editorOpen: boolean): Verdict {
-  const all = simpleCommands(command)
+  const all = simpleCommands(stripHeredocs(command))
   const everyWord = new Set(all.flat().map(w => relativeTo(root, w)))
   const verdicts: Verdict[] = []
 
@@ -132,11 +150,16 @@ export function judgeCommand(command: string, root: string, unityDir: string | n
     const sub = program === 'git' ? args[0] ?? '' : ''
     const rels = words.map(w => relativeTo(root, w))
 
-    // .lfsconfig and Unity's generated folders: only reading is allowed.
-    if (!READ_ONLY.has(program) && !(program === 'git' && ['diff', 'log', 'show', 'status', 'blame', 'ls-files'].includes(sub))) {
-      const never = rels.find(r => classifyPath(r, unityDir) === 'never')
-      if (never) verdicts.push({ kind: 'deny', reason: `${never} ne doit pas être modifié par Claude (LFS ou dossier généré par Unity).` })
-    }
+    // .lfsconfig and Unity's generated folders: a command may read them, not change them.
+    const targets = WRITERS.has(program)
+      ? rels.slice(1)
+      : COPIERS.has(program)
+        ? operands(rels.slice(1)).slice(-1)
+        : program === 'git' && GIT_WRITERS.has(sub)
+          ? rels.slice(2)
+          : []
+    const never = targets.find(r => classifyPath(r, unityDir) === 'never')
+    if (never) verdicts.push({ kind: 'deny', reason: `${never} ne doit pas être modifié par Claude (LFS ou dossier généré par Unity).` })
 
     // Output redirected into a Unity file is a hand edit.
     const redirect = words.indexOf('>')

@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { BoardCard, BoardSnapshot } from '../types'
 import { STATUS_ORDER, cardOfBranch, cardsFor, countsLine, parseProjectRef, promptFor } from './board'
-import { CONFIG_FILE, readConfig, toSlash, writeConfig } from './project'
+import { CONFIG_FILE, modsHelpCommand, readConfig, registerModsHelp, toSlash, writeConfig } from './project'
 
 const PANE = 'project-board'
 const REFRESH_EVERY_MS = 5 * 60_000
@@ -119,8 +119,11 @@ export const register: Register = on => {
       argumentHint: '[lien | owner/numéro | none]',
       immediate: true,
     })
+    await registerModsHelp($)
     return started
   })
+
+  on('command.run', { command: 'claude-mods' }, async $ => ({ text: await modsHelpCommand($) }))
 
   on('command.run', { command: 'board' }, async $ => {
     void refresh($)

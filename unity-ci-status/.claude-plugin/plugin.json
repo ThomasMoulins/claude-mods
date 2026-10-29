@@ -1,0 +1,6 @@
+{
+  "name": "unity-ci-status",
+  "version": "0.1.0",
+  "description": "Montre l'état des workflows GitHub Actions de ta branche courante (dernier run de chacun, jobs en échec) dans une ligne d'état et un panneau, via gh, en lecture seule.",
+  "types": "./types/index.d.ts"
+}

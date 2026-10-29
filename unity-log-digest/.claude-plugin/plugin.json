@@ -1,0 +1,5 @@
+{
+  "name": "unity-log-digest",
+  "version": "0.1.0",
+  "description": "Résume pour Claude les longues sorties Unity (unity test/build/run, Unity -batchmode, Editor.log) et refuse une commande unity qui ne vise pas le projet Unity."
+}

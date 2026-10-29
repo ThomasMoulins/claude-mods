@@ -8,8 +8,23 @@ export const CONFIG_FILE = '.claude/claude-mods.json'
 export type ModsConfig = {
   unityProject?: string
   editorLog?: string
+  // The Unity CLI to run, when `unity` is not on the app's PATH.
+  unityCli?: string
   github?: { owner: string; number: number }
+  // Workflow names unity-ci-status shows; all of them when absent.
+  ciWorkflows?: string[]
 }
+
+// Every plugin of the claude-mods marketplace, for /claude-mods.
+export const MODS = [
+  'unity-console',
+  'project-board',
+  'unity-asset-guard',
+  'unity-test-runner',
+  'unity-ci-status',
+  'unity-log-digest',
+  'wwise-soundbank-check',
+] as const
 
 export type UnityProject = {
   root: string
@@ -39,10 +54,49 @@ export function relativeTo(root: string, path: string): string {
   return starts ? p.slice(prefix.length) : p
 }
 
+// Resolves `.` and `..` segments: /a/b/../c is /a/c.
+export function normalize(path: string): string {
+  const p = toSlash(path)
+  const head = p.startsWith('/') ? '/' : (p.match(/^[A-Za-z]:\//)?.[0] ?? '')
+  const parts: string[] = []
+  for (const part of p.slice(head.length).split('/')) {
+    if (part === '' || part === '.') continue
+    if (part === '..' && parts.length > 0 && parts.at(-1) !== '..') parts.pop()
+    else parts.push(part)
+  }
+  return `${head}${parts.join('/')}` || '.'
+}
+
 export function absoluteIn(root: string, path: string): string {
   const p = toSlash(path)
-  if (isAbsolute(p)) return p
-  return p === '.' || p === '' ? toSlash(root) : `${toSlash(root)}/${p.replace(/^\.\//, '')}`
+  if (isAbsolute(p)) return normalize(p)
+  return p === '.' || p === '' ? toSlash(root) : normalize(`${toSlash(root)}/${p}`)
+}
+
+// Answers /claude-mods: the commands of the claude-mods plugins loaded in this session.
+export async function modsHelpCommand($: EngineInterface): Promise<string> {
+  const commands = await $.command.list()
+  const names = new Set<string>(MODS)
+  const lines: string[] = []
+  for (const mod of MODS) {
+    const own = commands.filter(c => (c.plugin ?? '').split('@')[0] === mod)
+    if (own.length === 0) continue
+    lines.push(`**${mod}**`)
+    for (const c of own) lines.push(`- /${c.name} : ${c.description}`)
+  }
+  const loaded = new Set(commands.map(c => (c.plugin ?? '').split('@')[0]).filter(p => names.has(p ?? '')))
+  const missing = MODS.filter(m => !loaded.has(m))
+  if (missing.length > 0) lines.push('', `Sans commande ou pas installés ici : ${missing.join(', ')}.`)
+  return lines.length > 0 ? lines.join('\n') : 'Aucun mod claude-mods ne déclare de commande dans cette session.'
+}
+
+// Registers /claude-mods once across the claude-mods plugins: the first one loaded answers it.
+export async function registerModsHelp($: EngineInterface): Promise<void> {
+  try {
+    await $.command.register({ name: 'claude-mods', description: 'Liste les commandes des mods claude-mods installés', immediate: true })
+  } catch {
+    // Another claude-mods plugin registered it first.
+  }
 }
 
 let cachedConfig: { root: string; mtimeMs: number; config: ModsConfig } | null = null

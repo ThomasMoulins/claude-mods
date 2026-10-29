@@ -1,0 +1,5 @@
+{
+  "name": "wwise-soundbank-check",
+  "version": "0.1.0",
+  "description": "Prévient quand les SoundBanks Wwise d'un projet Unity sont absentes ou plus anciennes que le projet Wwise (le jeu serait muet ou en retard), d'après WwiseSettings.xml."
+}

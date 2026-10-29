@@ -3,12 +3,32 @@
   "owner": {
     "name": "ThomasMoulins"
   },
-  "description": "Mods Claude Code pour développer un jeu Unity : erreurs de compilation, cartes GitHub, garde sur les fichiers Unity.",
+  "description": "Mods Claude Code pour développer un jeu Unity : erreurs de compilation, tests, CI, SoundBanks Wwise, cartes GitHub, sorties résumées, garde sur les fichiers Unity.",
   "plugins": [
     {
       "name": "unity-console",
       "source": "./unity-console",
       "description": "Erreurs de compilation C# de l'Editor Unity dans un panneau et une ligne d'état."
+    },
+    {
+      "name": "unity-test-runner",
+      "source": "./unity-test-runner",
+      "description": "Lance les tests Unity avec /unity-test et résume le rapport, chaque échec avec son fichier et sa ligne."
+    },
+    {
+      "name": "unity-ci-status",
+      "source": "./unity-ci-status",
+      "description": "État des workflows GitHub Actions de la branche courante, jobs en échec compris, en lecture seule."
+    },
+    {
+      "name": "unity-log-digest",
+      "source": "./unity-log-digest",
+      "description": "Résume pour Claude les longues sorties Unity (tests, build, batchmode, Editor.log)."
+    },
+    {
+      "name": "wwise-soundbank-check",
+      "source": "./wwise-soundbank-check",
+      "description": "Prévient quand les SoundBanks Wwise sont absentes ou plus anciennes que le projet Wwise."
     },
     {
       "name": "project-board",

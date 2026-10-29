@@ -1,0 +1,6 @@
+{
+  "name": "unity-test-runner",
+  "version": "0.1.0",
+  "description": "Lance les tests Unity (EditMode, PlayMode) avec /unity-test sans tour de Claude, et résume le rapport : totaux, et chaque échec avec son fichier et sa ligne.",
+  "types": "./types/index.d.ts"
+}

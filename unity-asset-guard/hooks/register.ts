@@ -1,6 +1,6 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { resolveUnityProject, unityProjectCommand } from './project'
+import { modsHelpCommand, registerModsHelp, resolveUnityProject, unityProjectCommand } from './project'
 import type { UnityProject } from './project'
 import { judgeCommand, judgeEdit, relativeTo } from './rules'
 import type { Verdict } from './rules'
@@ -57,8 +57,11 @@ export const register: Register = on => {
     } catch {
       // unity-console registered it first: its answer does the same.
     }
+    await registerModsHelp($)
     return started
   })
+
+  on('command.run', { command: 'claude-mods' }, async $ => ({ text: await modsHelpCommand($) }))
 
   on('command.run', { command: 'unity-project' }, async ($, e) => ({ text: await unityProjectCommand($, e.args) }))
 

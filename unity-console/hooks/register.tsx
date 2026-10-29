@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { ConsoleReport } from '../types'
 import { errorsAsText, parseEditorLog, repoPath } from './parse'
-import { describeProject, readConfig, resolveUnityProject, samePath, toSlash, unityProjectCommand } from './project'
+import { describeProject, modsHelpCommand, readConfig, registerModsHelp, resolveUnityProject, samePath, toSlash, unityProjectCommand } from './project'
 
 const PANE = 'unity-console'
 const SCAN_EVERY_MS = 3000
@@ -144,8 +144,11 @@ export const register: Register = on => {
     } catch {
       // unity-asset-guard registered it first: its answer does the same.
     }
+    await registerModsHelp($)
     return started
   })
+
+  on('command.run', { command: 'claude-mods' }, async $ => ({ text: await modsHelpCommand($) }))
 
   on('command.run', { command: 'unity-errors' }, async $ => {
     await scan($, true)
