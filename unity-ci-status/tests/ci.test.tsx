@@ -29,6 +29,9 @@ const PANE = {
   props: { title: 'CI', isFocused: false, bodyColumns: 70, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
 } as const
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 function engine(on: On, world: { runs?: unknown[]; branch?: string; config?: string } = {}) {
   const statuses: (string | undefined)[] = []
   const toasts: string[] = []
@@ -38,8 +41,8 @@ function engine(on: On, world: { runs?: unknown[]; branch?: string; config?: str
   const clock = mock.clock(on, { now: NOW })
   const config = '/repo/.claude/claude-mods.json'
   on('session.root', () => ({ value: '/repo' }))
-  on('fs.stat', (_, e) => (e.path === config && world.config ? { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } } : { deny: 'ENOENT' }))
-  on('fs.read', (_, e) => (e.path === config && world.config ? { value: world.config } : { deny: 'ENOENT' }))
+  on('fs.stat', (_, e) => (posix(e.path) === config && world.config ? { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (posix(e.path) === config && world.config ? { value: world.config } : { deny: 'ENOENT' }))
   on('process.run', (_, e) => {
     argvs.push([...e.argv])
     const ok = (stdout: string) => ({ value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } })

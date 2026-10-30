@@ -9,6 +9,9 @@ const SCRIPT = `${ROOT}/MonJeu/Assets/Scripts/Player/PlayerController.cs`
 
 type World = { editorOpen?: boolean; answer?: string | null; existing?: string[]; config?: string }
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 // Stands for the engine beneath the guard: the tool always succeeds, and the
 // question is answered as `world.answer` says (null: dismissed).
 function engine(on: On, world: World = {}) {
@@ -17,22 +20,26 @@ function engine(on: On, world: World = {}) {
   const config = `${ROOT}/.claude/claude-mods.json`
   on('session.root', () => ({ value: ROOT }))
   // The disk: one Unity project, MonJeu/, next to a stray ProjectSettings/ at the root.
-  on('fs.exists', (_, e) => ({
-    value: e.path.endsWith('/Temp/UnityLockfile')
-      ? world.editorOpen === true
-      : e.path === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` ||
-        e.path === `${ROOT}/ProjectSettings/ProjectVersion.txt` ||
-        (world.existing ?? [SCENE, SCRIPT]).includes(e.path),
-  }))
+  on('fs.exists', (_, e) => {
+    const path = posix(e.path)
+    return {
+      value: path.endsWith('/Temp/UnityLockfile')
+        ? world.editorOpen === true
+        : path === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` ||
+          path === `${ROOT}/ProjectSettings/ProjectVersion.txt` ||
+          (world.existing ?? [SCENE, SCRIPT]).includes(path),
+    }
+  })
   on('fs.list', (_, e) => {
+    const path = posix(e.path)
     const dir = (name: string) => ({ name, kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false })
-    if (e.path === ROOT) return { value: [dir('MonJeu'), dir('Documentation')] }
-    if (e.path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Scenes')] }
-    if (e.path === `${ROOT}/Assets`) return { value: [] }
+    if (path === ROOT) return { value: [dir('MonJeu'), dir('Documentation')] }
+    if (path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Scenes')] }
+    if (path === `${ROOT}/Assets`) return { value: [] }
     return { deny: 'ENOENT' }
   })
-  on('fs.stat', (_, e) => (e.path === config && world.config ? { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } } : { deny: 'ENOENT' }))
-  on('fs.read', (_, e) => (e.path === config && world.config ? { value: world.config } : { deny: 'ENOENT' }))
+  on('fs.stat', (_, e) => (posix(e.path) === config && world.config ? { value: { kind: 'file', size: 1, mtimeMs: 1, isLink: false } } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (posix(e.path) === config && world.config ? { value: world.config } : { deny: 'ENOENT' }))
   // $.ui.ask is a call of the AskUserQuestion tool.
   on('tool.call', { tool: 'AskUserQuestion' }, (_, e) => {
     const question = e.questions[0]?.question ?? ''

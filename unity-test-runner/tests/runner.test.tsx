@@ -32,6 +32,9 @@ const PANE = {
 
 type World = { editorOpen?: boolean; exitCode?: number; writesReport?: boolean; noCli?: boolean }
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 function engine(on: On, world: World = {}) {
   const spawned: string[][] = []
   const sent: string[] = []
@@ -39,20 +42,24 @@ function engine(on: On, world: World = {}) {
   const clock = mock.clock(on, { now: 1_000 })
   on('session.root', () => ({ value: ROOT }))
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/Users/me' : undefined }))
-  on('fs.exists', (_, e) => ({
-    value:
-      e.path === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` ||
-      (e.path.endsWith('/Temp/UnityLockfile') && world.editorOpen === true) ||
-      e.path in files,
-  }))
+  on('fs.exists', (_, e) => {
+    const path = posix(e.path)
+    return {
+      value:
+        path === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` ||
+        (path.endsWith('/Temp/UnityLockfile') && world.editorOpen === true) ||
+        path in files,
+    }
+  })
   on('fs.list', (_, e) => {
+    const path = posix(e.path)
     const dir = (name: string) => ({ name, kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false })
-    if (e.path === ROOT) return { value: [dir('MonJeu')] }
-    if (e.path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Tests')] }
+    if (path === ROOT) return { value: [dir('MonJeu')] }
+    if (path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Tests')] }
     return { deny: 'ENOENT' }
   })
   on('fs.stat', () => ({ deny: 'ENOENT' }))
-  on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] ?? '' } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (posix(e.path) in files ? { value: files[posix(e.path)] ?? '' } : { deny: 'ENOENT' }))
   on('process.spawn', async function* (_, e) {
     spawned.push([...e.argv])
     if (world.noCli || e.argv[0] !== 'unity') return { deny: 'ENOENT: cannot start' }
