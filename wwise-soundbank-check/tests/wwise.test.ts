@@ -15,6 +15,9 @@ const RUN = { args: '', origin: { kind: 'composer' }, presentation: { isFullscre
 
 type Entry = { name: string; kind: 'file' | 'dir'; mtimeMs?: number }
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 function engine(on: On, world: { hasWwise?: boolean; bankTime?: number | null; sourceTime?: number } = {}) {
   const statuses: (string | undefined)[] = []
   const tree: Record<string, Entry[]> = {
@@ -40,12 +43,12 @@ function engine(on: On, world: { hasWwise?: boolean; bankTime?: number | null; s
   mock.clock(on)
   on('session.root', () => ({ value: ROOT }))
   on('fs.exists', (_, e) => ({
-    value: e.path === `${P}/ProjectSettings/ProjectVersion.txt` || (e.path === `${P}/Assets/WwiseSettings.xml` && world.hasWwise !== false),
+    value: posix(e.path) === `${P}/ProjectSettings/ProjectVersion.txt` || (posix(e.path) === `${P}/Assets/WwiseSettings.xml` && world.hasWwise !== false),
   }))
-  on('fs.read', (_, e) => (e.path === `${P}/Assets/WwiseSettings.xml` ? { value: SETTINGS } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (posix(e.path) === `${P}/Assets/WwiseSettings.xml` ? { value: SETTINGS } : { deny: 'ENOENT' }))
   on('fs.stat', () => ({ deny: 'ENOENT' }))
   on('fs.list', (_, e) => {
-    const entries = tree[e.path]
+    const entries = tree[posix(e.path)]
     return entries ? { value: entries.map(x => ({ size: 1, isLink: false, mtimeMs: 0, ...x })) } : { deny: 'ENOENT' }
   })
   on('ui.status', (_, e) => {

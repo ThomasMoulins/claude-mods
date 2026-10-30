@@ -19,23 +19,27 @@ const REPORT = `<test-run total="3" passed="2" failed="1" inconclusive="0" skipp
 <test-case name="B" fullname="T.B" result="Failed"><failure><message><![CDATA[Expected 1 but was 2]]></message><stack-trace><![CDATA[at T.B () in /repo/MonJeu/Assets/Tests/B.cs:9]]></stack-trace></failure></test-case>
 </test-run>`
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 function engine(on: On, world: { stdout?: string; isError?: boolean; report?: string } = {}) {
   const written: Record<string, string> = {}
   const ran: string[] = []
   mock.clock(on, { now: 50_000 })
   on('session.root', () => ({ value: ROOT }))
-  on('fs.exists', (_, e) => ({ value: e.path === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` || e.path === `${ROOT}/ProjectSettings/ProjectVersion.txt` }))
+  on('fs.exists', (_, e) => ({ value: posix(e.path) === `${ROOT}/MonJeu/ProjectSettings/ProjectVersion.txt` || posix(e.path) === `${ROOT}/ProjectSettings/ProjectVersion.txt` }))
   on('fs.list', (_, e) => {
+    const path = posix(e.path)
     const dir = (name: string) => ({ name, kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false })
-    if (e.path === ROOT) return { value: [dir('MonJeu')] }
-    if (e.path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Scripts')] }
-    if (e.path === `${ROOT}/Assets`) return { value: [] }
+    if (path === ROOT) return { value: [dir('MonJeu')] }
+    if (path === `${ROOT}/MonJeu/Assets`) return { value: [dir('Scripts')] }
+    if (path === `${ROOT}/Assets`) return { value: [] }
     return { deny: 'ENOENT' }
   })
-  on('fs.stat', (_, e) => (world.report && e.path.endsWith('.xml') ? { value: { kind: 'file', size: 1, mtimeMs: 50_000, isLink: false } } : { deny: 'ENOENT' }))
-  on('fs.read', (_, e) => (world.report && e.path.endsWith('.xml') ? { value: world.report } : { deny: 'ENOENT' }))
+  on('fs.stat', (_, e) => (world.report && posix(e.path).endsWith('.xml') ? { value: { kind: 'file', size: 1, mtimeMs: 50_000, isLink: false } } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (world.report && posix(e.path).endsWith('.xml') ? { value: world.report } : { deny: 'ENOENT' }))
   on('fs.write', (_, e) => {
-    written[e.path] = e.text
+    written[posix(e.path)] = e.text
     return { value: undefined }
   })
   on('command.register', (_, e) => ({ value: { command: e.name } }))

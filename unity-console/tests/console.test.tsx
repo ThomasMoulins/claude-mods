@@ -41,6 +41,9 @@ type World = {
   config?: string
 }
 
+// On Windows the engine hands the fs mocks C:\repo\... for /repo/...: the fake disk keys by the POSIX path.
+const posix = (path: string): string => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+
 // Stands for the disk and the engine beneath the mod.
 function engine(on: On, world: World = {}) {
   const root = world.root ?? '/repo'
@@ -58,30 +61,34 @@ function engine(on: On, world: World = {}) {
   mock.clock(on)
   on('session.root', () => ({ value: root }))
   on('env.get', (_, e) => ({ value: env[e.name] }))
-  on('fs.exists', (_, e) => ({
-    value:
-      e.path in files ||
-      e.path === `${root}/ProjectSettings/ProjectVersion.txt` ||
-      projects.some(p => e.path === `${p}/ProjectSettings/ProjectVersion.txt`) ||
-      e.path === '/Users/me/Library/Logs',
-  }))
+  on('fs.exists', (_, e) => {
+    const path = posix(e.path)
+    return {
+      value:
+        path in files ||
+        path === `${root}/ProjectSettings/ProjectVersion.txt` ||
+        projects.some(p => path === `${p}/ProjectSettings/ProjectVersion.txt`) ||
+        path === '/Users/me/Library/Logs',
+    }
+  })
   on('fs.list', (_, e) => {
-    if (projects.some(p => e.path === `${p}/Assets`)) return { value: [{ name: 'Scripts', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] }
-    const names = dirs[e.path]
+    const path = posix(e.path)
+    if (projects.some(p => path === `${p}/Assets`)) return { value: [{ name: 'Scripts', kind: 'dir', size: 0, mtimeMs: 0, isLink: false }] }
+    const names = dirs[path]
     if (names === undefined) return { deny: 'ENOENT' }
     return { value: names.map(name => ({ name, kind: 'dir' as const, size: 0, mtimeMs: 0, isLink: false })) }
   })
   on('fs.stat', (_, e) => {
-    const text = files[e.path]
+    const text = files[posix(e.path)]
     return text === undefined ? { deny: 'ENOENT' } : { value: { kind: 'file', size: text.length, mtimeMs: text.length, isLink: false } }
   })
   on('fs.read', (_, e) => {
-    const text = files[e.path]
+    const text = files[posix(e.path)]
     return text === undefined ? { deny: 'ENOENT' } : { value: text }
   })
   on('fs.write', (_, e) => {
-    written[e.path] = e.text
-    files[e.path] = e.text
+    written[posix(e.path)] = e.text
+    files[posix(e.path)] = e.text
     return { value: undefined }
   })
   on('command.register', (_, e) => ({ value: { command: e.name } }))
