@@ -15,12 +15,22 @@ const ITEMS = JSON.stringify({
       epic: 'Feat : Joueur',
       assignees: [ME],
       'story Points': 8,
+      'end Date': '2026-12-20',
       content: { number: 221, url: 'https://github.com/o/r/issues/221', body: 'User Story : en tant que joueur…' },
     },
     { id: 'B', title: 'Coffre', status: 'Review', priority: 'Medium', assignees: [ME], content: { number: 230, url: 'https://github.com/o/r/issues/230', body: '' } },
     { id: 'C', title: 'Ancienne carte', status: 'Done', assignees: [ME], content: { number: 12 } },
     { id: 'D', title: "La carte d'un autre", status: 'Todo', assignees: ['un-autre-membre'], content: { number: 99 } },
+    { id: 'E', title: '[PORT_IA] IA framework', status: 'Todo', priority: 'Low', assignees: [ME], 'end Date': '2026-11-05', content: { number: 240 } },
+    { id: 'F', title: '[SUP_TEST] Setup tests unitaires Unity', status: 'Review', priority: 'High', assignees: [ME], content: { number: 33 } },
+    { id: 'G', title: 'feat(ai): add perception system', status: 'Todo', priority: 'High', assignees: [ME], content: { number: 275 } },
   ],
+})
+// The issue of F is closed though its Status still says Review.
+const STATES = JSON.stringify({
+  data: {
+    nodes: ['A', 'B', 'E', 'F', 'G'].map(id => ({ id, isArchived: false, content: { __typename: 'Issue', state: id === 'F' ? 'CLOSED' : 'OPEN' } })),
+  },
 })
 
 const RUN = { args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } } as const
@@ -49,10 +59,12 @@ function engine(on: On, world: { config?: string; ghFails?: boolean } = {}) {
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.status', () => ({ value: undefined }))
-  on('fs.stat', (_, e) => (e.path in files ? { value: { kind: 'file', size: 1, mtimeMs: (files[e.path] ?? '').length, isLink: false } } : { deny: 'ENOENT' }))
-  on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] ?? '' } : { deny: 'ENOENT' }))
+  // On Windows the engine hands C:\repo\… for /repo/…: the files are keyed by their POSIX form.
+  const posix = (path: string) => path.replace(/\\/g, '/').replace(/^[A-Za-z]:/, '')
+  on('fs.stat', (_, e) => (posix(e.path) in files ? { value: { kind: 'file', size: 1, mtimeMs: (files[posix(e.path)] ?? '').length, isLink: false } } : { deny: 'ENOENT' }))
+  on('fs.read', (_, e) => (posix(e.path) in files ? { value: files[posix(e.path)] ?? '' } : { deny: 'ENOENT' }))
   on('fs.write', (_, e) => {
-    files[e.path] = e.text
+    files[posix(e.path)] = e.text
     return { value: undefined }
   })
   on('process.run', (_, e) => {
@@ -61,6 +73,7 @@ function engine(on: On, world: { config?: string; ghFails?: boolean } = {}) {
     if (e.argv[0] === 'gh' && world.ghFails) {
       return { value: { exitCode: 1, stdout: '', stderr: 'error: your authentication token is missing required scopes [read:project]', isStdoutTruncated: false, isStderrTruncated: false } }
     }
+    if (e.argv[2] === 'graphql') return ok(STATES)
     if (e.argv[1] === 'api') return ok(`${ME}\n`)
     if (e.argv[2] === 'view') return ok(JSON.stringify({ title: 'MON-JEU' }))
     if (e.argv[2] === 'item-list') return ok(ITEMS)
@@ -91,16 +104,43 @@ test('the pane shows only my open cards, by status, with the branch card marked'
   for (const surface of ['terminal', 'desktop', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect((await ui.find({ type: 'Text', text: /^MON-JEU/ }))?.text).toBe(`MON-JEU · ${ME}`)
-    expect(await ui.find({ type: 'Text', text: /^Todo \(1\)$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Todo \(3\)$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^Review \(1\)$/ })).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /#221/ }))?.text).toContain('▶ #221')
     expect(await ui.find({ type: 'Text', text: /La carte d'un autre/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /Ancienne carte/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /2 terminée\(s\)/ })).toBeDefined()
     await ui.unmount()
   }
   // Read-only: gh is only ever asked to read.
   expect(argvs.filter(a => a[0] === 'gh').every(a => a[1] === 'api' || a[2] === 'item-list' || a[2] === 'view')).toBe(true)
+  expect(argvs.some(a => a.join(' ').includes('mutation'))).toBe(false)
   expect(argvs.find(a => a[2] === 'item-list')).toContain('mon-orga')
+})
+
+test('a closed or archived card is hidden whatever its Status says', async ($, on) => {
+  engine(on, { config: CONFIGURED })
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  await $.command.run({ ...RUN, command: 'board' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /#230 Coffre/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /SUP_TEST/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('the Todo cards come by deadline, cards without one last, with only the date beneath', async ($, on) => {
+  engine(on, { config: CONFIGURED })
+  await $.session.start({ cwd: '/repo', surface: 'desktop', isInteractive: true })
+  await $.command.run({ ...RUN, command: 'board' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const rows = await ui.findAll({ type: 'Text', text: /^(▶ )?#\d+ / })
+  expect(rows.map(r => r.text?.match(/#(\d+)/)?.[1])).toEqual(['230', '240', '221', '275'])
+  expect(await ui.find({ type: 'Text', text: '→ 2026-11-05' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '→ 2026-12-20' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /High|Medium|Low|Feat : Joueur|pts/ })).toBeUndefined()
+  await ui.unmount()
 })
 
 test('with no project set, the pane says how to set one, and /board-project sets it', async ($, on) => {
@@ -119,7 +159,7 @@ test('with no project set, the pane says how to set one, and /board-project sets
   expect(JSON.parse(files[CONFIG] ?? '{}')).toEqual({ github: { owner: 'mon-orga', number: 359 } })
 
   ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(await ui.find({ type: 'Text', text: /^Todo \(1\)$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Todo \(3\)$/ })).toBeDefined()
   await ui.unmount()
 })
 

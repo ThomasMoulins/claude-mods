@@ -33,7 +33,7 @@
     {
       "name": "project-board",
       "source": "./project-board",
-      "description": "Tes cartes d'un projet GitHub (statut, priorité, epic) dans un panneau, en lecture seule."
+      "description": "Tes cartes ouvertes d'un projet GitHub, par statut et deadline, dans un panneau, en lecture seule."
     },
     {
       "name": "unity-asset-guard",
