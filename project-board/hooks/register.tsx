@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { BoardCard, BoardSnapshot } from '../types'
-import { STATUS_ORDER, cardOfBranch, cardsFor, countsLine, parseProjectRef, promptFor } from './board'
+import { STATE_QUERY, STATUS_ORDER, cardOfBranch, cardsFor, closedItems, countsLine, parseProjectRef, promptFor } from './board'
 import { CONFIG_FILE, modsHelpCommand, readConfig, registerModsHelp, toSlash, writeConfig } from './project'
 
 const PANE = 'project-board'
@@ -35,6 +35,16 @@ async function gh($: EngineInterface, args: string[], what: string): Promise<str
   return run.stdout
 }
 
+// The cards archived, or whose issue or pull request is closed, by id; a hundred ids per query.
+async function closedCards($: EngineInterface, ids: readonly string[]): Promise<Set<string>> {
+  const closed = new Set<string>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const vars = ids.slice(i, i + 100).flatMap(id => ['-f', `ids[]=${id}`])
+    for (const id of closedItems(await gh($, ['api', 'graphql', '-f', `query=${STATE_QUERY}`, ...vars], 'api graphql'))) closed.add(id)
+  }
+  return closed
+}
+
 async function refresh($: EngineInterface): Promise<void> {
   if (isRefreshing) return
   isRefreshing = true
@@ -55,7 +65,10 @@ async function refresh($: EngineInterface): Promise<void> {
     }
     const items = await gh($, ['project', 'item-list', number, '--owner', github.owner, '--format', 'json', '--limit', '500'], 'project item-list')
     const branch = await $.process.run(['git', 'branch', '--show-current'], { cwd: root })
-    const { cards, doneCount } = cardsFor(items, login)
+    const mine = cardsFor(items, login)
+    const closed = await closedCards($, mine.cards.map(c => c.id))
+    const cards = mine.cards.filter(c => !closed.has(c.id))
+    const doneCount = mine.doneCount + mine.cards.length - cards.length
     const snapshot: BoardSnapshot = {
       state: 'ready',
       projectRef: ref,
@@ -150,9 +163,7 @@ export const register: Register = on => {
           {cut(`${card.id === current?.id ? '▶ ' : ''}${card.number !== null ? `#${card.number} ` : ''}${card.title}`, width)}
         </Text>
         <Box flexDirection="row" gap={1}>
-          <Text dimColor>
-            {cut([card.priority, card.epic, card.storyPoints !== null ? `${card.storyPoints} pts` : null, card.endDate && `→ ${card.endDate}`].filter(Boolean).join(' · '), Math.max(10, width - 24))}
-          </Text>
+          {card.endDate !== null && <Text dimColor>{`→ ${card.endDate}`}</Text>}
           <Button
             key={`work-${card.id}`}
             label="Travailler dessus"

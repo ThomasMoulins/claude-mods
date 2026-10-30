@@ -19,6 +19,33 @@ type RawItem = {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)
 const num = (v: unknown): number | null => (typeof v === 'number' ? v : null)
+const rank = (p: string | null) => (p !== null && PRIORITY_ORDER.includes(p) ? PRIORITY_ORDER.indexOf(p) : PRIORITY_ORDER.length)
+
+// The order to work in: the nearest deadline first, cards without one last, then by priority.
+export function byDeadline(a: BoardCard, b: BoardCard): number {
+  const [x, y] = [a.endDate ?? '9999-12-31', b.endDate ?? '9999-12-31']
+  return x < y ? -1 : x > y ? 1 : rank(a.priority) - rank(b.priority)
+}
+
+// What `gh project item-list` leaves out: whether an item is archived, and the
+// state of its issue or pull request. Read-only, by the items' ids.
+export const STATE_QUERY =
+  'query($ids: [ID!]!) { nodes(ids: $ids) { ... on ProjectV2Item { id isArchived content { __typename ... on Issue { state } ... on PullRequest { state } } } } }'
+
+type RawState = { id?: unknown; isArchived?: unknown; content?: { state?: unknown } | null } | null
+
+// Reads STATE_QUERY's answer: the items no longer to do, archived, closed,
+// merged, or whose issue was deleted, whatever their Status column says.
+export function closedItems(json: string): Set<string> {
+  const nodes = (JSON.parse(json) as { data?: { nodes?: RawState[] } }).data?.nodes ?? []
+  const closed = new Set<string>()
+  for (const n of nodes) {
+    if (typeof n?.id !== 'string') continue
+    const state = n.content?.state
+    if (n.isArchived === true || n.content === null || state === 'CLOSED' || state === 'MERGED') closed.add(n.id)
+  }
+  return closed
+}
 
 // Reads `gh project item-list --format json`; keeps the cards assigned to `login`.
 export function cardsFor(json: string, login: string): { cards: BoardCard[]; doneCount: number } {
@@ -37,11 +64,8 @@ export function cardsFor(json: string, login: string): { cards: BoardCard[]; don
     url: str(i.content?.url),
     body: (str(i.content?.body) ?? '').slice(0, BODY_LIMIT),
   }))
-  const rank = (p: string | null) => (p === null ? PRIORITY_ORDER.length : PRIORITY_ORDER.indexOf(p))
-  return {
-    cards: cards.filter(c => c.status !== 'Done').sort((a, b) => rank(a.priority) - rank(b.priority)),
-    doneCount: cards.length - cards.filter(c => c.status !== 'Done').length,
-  }
+  const open = cards.filter(c => c.status !== 'Done')
+  return { cards: open.sort(byDeadline), doneCount: cards.length - open.length }
 }
 
 // A branch such as feat/221-port-trait points at card #221.
